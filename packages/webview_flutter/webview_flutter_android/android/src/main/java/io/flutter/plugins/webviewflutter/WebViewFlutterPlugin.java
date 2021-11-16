@@ -15,9 +15,11 @@ import io.flutter.plugin.common.BinaryMessenger;
  * <p>Call {@link #registerWith(Registrar)} to use the stable {@code io.flutter.plugin.common}
  * package instead.
  */
-public class WebViewFlutterPlugin implements FlutterPlugin {
+public class WebViewFlutterPlugin implements FlutterPlugin, PluginRegistry.ActivityResultListener , ActivityAware  {
 
   private FlutterCookieManager flutterCookieManager;
+  public static Activity activity;
+  private WebViewFactory factory;
 
   /**
    * Add an instance of this to {@link io.flutter.embedding.engine.plugins.PluginRegistry} to
@@ -67,7 +69,36 @@ public class WebViewFlutterPlugin implements FlutterPlugin {
       return;
     }
 
+    activity=null;
     flutterCookieManager.dispose();
     flutterCookieManager = null;
+  }
+
+  @Override
+  public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
+    Log.v("userlogin","onActivityResult in plugin");
+    if (factory!=null&&factory.getFlutterWebView()!=null){
+        return factory.getFlutterWebView().activityResult(requestCode,resultCode,data);
+    }
+    return false;
+  }
+
+  @Override
+  public void onAttachedToActivity(ActivityPluginBinding binding) {
+  	
+    activity=binding.getActivity();
+    binding.addActivityResultListener(this);
+  }
+
+  @Override
+  public void onDetachedFromActivityForConfigChanges() {
+  }
+
+  @Override
+  public void onReattachedToActivityForConfigChanges(ActivityPluginBinding binding) {
+  }
+  
+  @Override
+  public void onDetachedFromActivity() {
   }
 }
