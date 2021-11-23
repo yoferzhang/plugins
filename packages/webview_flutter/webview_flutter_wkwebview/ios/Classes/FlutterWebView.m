@@ -94,6 +94,18 @@
     configuration.userContentController = userContentController;
     [self updateAutoMediaPlaybackPolicy:args[@"autoMediaPlaybackPolicy"]
                         inConfiguration:configuration];
+    
+      if (@available(iOS 11.0, *)) {
+          NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+          NSArray *cookies = cookieStorage.cookies;
+          WKWebsiteDataStore *dataStore = [WKWebsiteDataStore nonPersistentDataStore];
+          NSInteger count = cookies.count;
+          for (NSInteger i = 0; i < count; i++) {
+              NSHTTPCookie *cookie = cookies[i];
+              [dataStore.httpCookieStore setCookie:cookie completionHandler:nil];
+              configuration.websiteDataStore = dataStore;
+          }
+      }
 
     _webView = [[FLTWKWebView alloc] initWithFrame:frame configuration:configuration];
     _navigationDelegate = [[FLTWKNavigationDelegate alloc] initWithChannel:_channel];
