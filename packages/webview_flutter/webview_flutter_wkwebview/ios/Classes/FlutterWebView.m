@@ -94,18 +94,6 @@
     configuration.userContentController = userContentController;
     [self updateAutoMediaPlaybackPolicy:args[@"autoMediaPlaybackPolicy"]
                         inConfiguration:configuration];
-    
-      if (@available(iOS 11.0, *)) {
-          NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-          NSArray *cookies = cookieStorage.cookies;
-          WKWebsiteDataStore *dataStore = [WKWebsiteDataStore nonPersistentDataStore];
-          NSInteger count = cookies.count;
-          for (NSInteger i = 0; i < count; i++) {
-              NSHTTPCookie *cookie = cookies[i];
-              [dataStore.httpCookieStore setCookie:cookie completionHandler:nil];
-              configuration.websiteDataStore = dataStore;
-          }
-      }
 
     _webView = [[FLTWKWebView alloc] initWithFrame:frame configuration:configuration];
     _navigationDelegate = [[FLTWKNavigationDelegate alloc] initWithChannel:_channel];
@@ -132,7 +120,9 @@
       NSURL* url = [NSURL URLWithString:initialUrl];
       if (url) {
         NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:url];
-        [_webView loadRequest:request];
+          [self copyNSHTTPCookieStorageToWKHTTPCookieStoreWithCompletionHandler:^{
+              [self->_webView loadRequest:request];
+          }];
       }
     }
   }
@@ -147,6 +137,28 @@
 
 - (UIView*)view {
   return _webView;
+}
+
+#pragma mark-- private
+
+/// 解决cookie丢失问题
+- (void)copyNSHTTPCookieStorageToWKHTTPCookieStoreWithCompletionHandler:(nullable dispatch_block_t)theCompletionHandler {
+    NSArray *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookies];
+    if (@available(iOS 11.0, *)) {
+        WKHTTPCookieStore *cookieStroe = self.webView.configuration.websiteDataStore.httpCookieStore;
+        if (cookies.count == 0) {
+            !theCompletionHandler ?: theCompletionHandler();
+            return;
+        }
+        for (NSHTTPCookie *cookie in cookies) {
+            [cookieStroe setCookie:cookie completionHandler:^{
+                if ([[cookies lastObject] isEqual:cookie]) {
+                    !theCompletionHandler ?: theCompletionHandler();
+                    return;
+                }
+            }];
+        }
+    }
 }
 
 - (void)onMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
@@ -277,8 +289,10 @@
               message:@"Failed parsing the URL"
               details:[NSString stringWithFormat:@"Request was: '%@'", [call arguments]]]);
   } else {
-    [_webView loadRequest:request];
-    result(nil);
+      [self copyNSHTTPCookieStorageToWKHTTPCookieStoreWithCompletionHandler:^{
+          [self->_webView loadRequest:request];
+          result(nil);
+      }];
   }
 }
 
@@ -290,8 +304,10 @@
               message:@"Failed parsing the URL"
               details:[NSString stringWithFormat:@"Request was: '%@'", [call arguments]]]);
   } else {
-    [_webView loadRequest:request];
-    result(nil);
+      [self copyNSHTTPCookieStorageToWKHTTPCookieStoreWithCompletionHandler:^{
+          [self->_webView loadRequest:request];
+          result(nil);
+      }];
   }
 }
 
@@ -664,7 +680,9 @@
                forNavigationAction:(WKNavigationAction*)navigationAction
                     windowFeatures:(WKWindowFeatures*)windowFeatures {
   if (!navigationAction.targetFrame.isMainFrame) {
-    [webView loadRequest:navigationAction.request];
+      [self copyNSHTTPCookieStorageToWKHTTPCookieStoreWithCompletionHandler:^{
+          [webView loadRequest:navigationAction.request];
+      }];
   }
 
   return nil;
